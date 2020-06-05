@@ -1,0 +1,131 @@
+---
+title: "ML Model for Weight Lifting Exercizes"
+author: "Kirt Preet Singh"
+date: "6/5/2020"
+output: html_document
+---
+---
+title: "ML Model for Weight Lifting Exercises"
+author: "Kirt Preet Singh"
+date: "6/5/2020"
+output: html_document
+---
+
+## Synopsis
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har
+
+## Data 
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+## Required Libraries
+```{r,message=FALSE}
+library(caret)
+library(rattle)
+library(randomForest)
+library(gbm)
+```
+
+## Getting Started
+Here we do the daily drill, upload the data in R, and split it into the sunsequent sets. Following is a short explanation of how we're gonna use the data here:
+
+1. data = The downloaded training set which fill further be splitted into training and test sets.
+2. training = The majority of data obtained by splitting the 'data'. It's the data in reference to which we'll develop a model.
+3. testing = The 30% of 'data'. It's the data in referance to which our model will be tested.
+4. test = The downloaded data for which we have to actually make a prediction.
+```{r}
+data <- read.csv("C:/Users/HP/Documents/RDirectory/pml-training.csv")
+test <- read.csv("C:/Users/HP/Documents/RDirectory/pml-testing.csv")
+inTrain <- createDataPartition(data$classe, p = 0.7, list = FALSE)
+training <- data[inTrain,]
+testing <- data[-inTrain,]
+```
+
+## Cleaning Data 
+The data we have contains some NA values which are needed to be dealt with before we go ahead making models, also there is some amount of unnecessary variables that are needed to be omitted for successfully obtaining a fairly accurate model.
+```{r}
+nzv <- nearZeroVar(training)
+training <- training[,-nzv]
+testing <- testing[,-nzv]
+test <- test[,-nzv]
+na_variants <- sapply(training,function(x) mean(is.na(x)) > 0.95)
+training <- training[, na_variants == FALSE]
+testing <- testing[, na_variants == FALSE]
+test <- test[, na_variants == FALSE]
+```
+
+Let's see how many variables are we left with
+```{r}
+dim(training)
+dim(testing)
+```
+
+Upon inspection we also need to omit the 1st 7 variables too, as most of them aren't numeric, and even the ones which are tend to have an uncanny and undesirable effect on models we're gonna build. 
+```{r}
+training <- training[,-(1:7)]
+testing <- testing[,-(1:7)]
+test <- test[,-(1:7)]
+```
+
+## Building a model using Machine Learning Algorithms
+
+### A Tree Model
+Here we predict with trees, And after building the model we shall look at the tree.
+```{r,cache=TRUE}
+treeModFit <- train(classe~.,data = training, method = "rpart")
+fancyRpartPlot(treeModFit$finalModel)
+```
+
+The tree looks diverse enough, now we must head towards the prediction and accuracy of the model                   
+```{r}
+testing$classe <- as.factor(testing$classe)
+tree_predict <- predict(treeModFit, testing)
+tree_cm <- confusionMatrix(tree_predict, testing$classe)
+tree_cm$overall[1]
+```
+
+58% accuracy isn't acceptable, we must develop a better model for our data.
+
+### A Random Forest Model 
+```{r,cache=TRUE}
+rfModFit <- train(classe~.,data = training, method = "rf", ntree = 100)
+rf_Predict <- predict(rfModFit, testing)
+rf_cm <- confusionMatrix(rf_Predict, testing$classe)
+rf_cm
+```
+ 
+The *Confusion Matrix* of the random forest model looks good enough, maybe a graphical representation would speak louder.
+```{r}
+plot(rf_cm$table)
+```
+
+All this is good and dandy but our major concern here is the accuracy of the model.
+```{r}
+rf_cm$overall[1]
+```
+
+An approximately 99% accuracy is exactly we're looking for, although we can't be done just yet without having look at our boosting prediction.
+
+### Boosting Model
+```{r,cache=TRUE}
+gbmModFit <- train(classe~.,data = training, method = "gbm",verbose = FALSE)
+gbm_Predict <- predict(gbmModFit, testing)
+gbm_cm <- confusionMatrix(gbm_Predict, testing$classe)
+gbm_cm$overall[1]
+```
+
+A 96% accuracy is good but provided, a 99% is better.
+
+## Conclusion
+After having a look at such models we choose the Random Forest Model as our finalized model that provided a groundbreaking accuracy of 99%.
+
+#### Predicting for our test data 
+```{r}
+predict(rfModFit, test)
+```
